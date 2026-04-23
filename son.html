@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Ribbon MIDI Controller</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --panel: #1b1b1b;
+      --panel-2: #222;
+      --text: #f3f3f3;
+      --muted: #9e9e9e;
+      --accent: #4fc3f7;
+      --danger: #ff6b6b;
+      --ok: #7ddc84;
+      --ribbon-h: 140px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(180deg, #111, #181818 45%, #101010);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+    .card {
+      background: linear-gradient(180deg, var(--panel), #141414);
+      border: 1px solid #2b2b2b;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.28);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    select, button, input[type="range"], input[type="number"] {
+      width: 100%;
+    }
+    select, button, input[type="number"] {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+    button {
+      cursor: pointer;
+      font-weight: 700;
+    }
+    button.primary { background: #23404d; border-color: #335a6b; }
+    button.stop { background: #4d2323; border-color: #6b3333; }
+    .ribbon-shell {
+      padding: 16px;
+      background: linear-gradient(180deg, #0f0f0f, #1c1c1c);
+      border-radius: 18px;
+      border: 1px solid #2f2f2f;
+    }
+    .ribbon {
+      position: relative;
+      height: var(--ribbon-h);
+      border-radius: 14px;
+      border: 2px solid #555;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.07), rgba(0,0,0,.2)),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 2px, transparent 2px 28px),
+        linear-gradient(180deg, #222 0%, #4a4a4a 50%, #1d1d1d 100%);
+      box-shadow: inset 0 0 18px rgba(0,0,0,.8), 0 8px 20px rgba(0,0,0,.35);
+      touch-action: none;
+      user-select: none;
+      overflow: hidden;
+    }
+    .center-line, .position, .note-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      pointer-events: none;
+    }
+    .center-line {
+      left: 50%;
+      width: 1px;
+      background: rgba(255,255,255,.12);
+    }
+    .position {
+      width: 2px;
+      background: rgba(79, 195, 247, .95);
+      box-shadow: 0 0 10px rgba(79, 195, 247, .7);
+      transform: translateX(-1px);
+      display: none;
+    }
+    .note-line {
+      width: 1px;
+      background: rgba(255,255,255,.08);
+    }
+    .note-tag {
+      position: absolute;
+      bottom: 6px;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: #cfcfcf;
+      pointer-events: none;
+      opacity: .7;
+    }
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0,1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .stat {
+      background: #181818;
+      border: 1px solid #2c2c2c;
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .stat .k {
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+    .stat .v {
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .slider-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .hint {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .pill {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #242424;
+      border: 1px solid #343434;
+    }
+    .ok { color: var(--ok); }
+    .bad { color: var(--danger); }
+    @media (max-width: 780px) {
+      .toolbar, .status-grid, .slider-row { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 520px) {
+      .toolbar, .status-grid, .slider-row { grid-template-columns: 1fr; }
+      h1 { font-size: 20px; }
+      :root { --ribbon-h: 120px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Ribbon MIDI Controller</h1>
+      <div class="sub">
+        Chrome içinde Web MIDI ile çalışır. Ribbon alanına dokunup sürükleyerek nota ve pitch bend gönderir. Arduino kodundaki mantık temel alınarak tarayıcıya uyarlanmıştır.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <div class="field">
+          <label>MIDI Çıkışı</label>
+          <select id="midiOut"></select>
+        </div>
+        <div class="field">
+          <label>MIDI Kanalı</label>
+          <select id="channel"></select>
+        </div>
+        <div class="field">
+          <label>Alt Nota (MIDI)</label>
+          <input id="baseNote" type="number" min="0" max="127" value="36" />
+        </div>
+        <div class="field">
+          <label>İşlem</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <button id="connectBtn" class="primary">Bağlan</button>
+            <button id="panicBtn" class="stop">Panic</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="slider-row">
+        <div class="field">
+          <label>Parlaklık / CC74</label>
+          <input id="brightness" type="range" min="0" max="127" value="32" />
+        </div>
+        <div class="field">
+          <label>Bend Range (yarı ses)</label>
+          <input id="bendRange" type="range" min="1" max="24" value="12" />
+        </div>
+      </div>
+      <div class="slider-row" style="margin-top:12px;">
+        <div class="field">
+          <label>Ribbon Span (yarı ses)</label>
+          <input id="spanSemis" type="range" min="12" max="48" value="36" />
+        </div>
+        <div class="field">
+          <label>Vibrato Derinliği</label>
+          <input id="vibratoDepth" type="range" min="0" max="1200" value="180" />
+        </div>
+      </div>
+      <div class="slider-row" style="margin-top:12px;">
+        <div class="field">
+          <label>Vibrato Hızı</label>
+          <input id="vibratoRate" type="range" min="1" max="10" value="6" />
+        </div>
+        <div class="field">
+          <label>Yumuşatma</label>
+          <input id="smoothing" type="range" min="0" max="0.45" step="0.01" value="0.14" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card ribbon-shell">
+      <div id="ribbon" class="ribbon"></div>
+      <div class="status-grid">
+        <div class="stat"><div class="k">Durum</div><div class="v" id="statusText">Hazır değil</div></div>
+        <div class="stat"><div class="k">Nota</div><div class="v" id="noteText">-</div></div>
+        <div class="stat"><div class="k">Pitch Bend</div><div class="v" id="bendText">8192</div></div>
+        <div class="stat"><div class="k">CC74</div><div class="v" id="ccText">32</div></div>
+        <div class="stat"><div class="k">Pozisyon</div><div class="v" id="posText">0.000</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hint">
+        <span class="pill">Not</span>
+        Bu sürüm, gönderdiğin Arduino kodunun tarayıcıya uyarlanmış halidir. Donanımdaki analog okuma, filtreleme ve DAC/CV kısımları yerine Web MIDI çıkışı kullanır. Dokunurken nota açar, sürüklerken bend yapar, bırakınca note off gönderir. Hafif vibrato için küçük pitch dalgalanması eklenmiştir.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const midiOutSelect = document.getElementById('midiOut');
+    const channelSelect = document.getElementById('channel');
+    const baseNoteInput = document.getElementById('baseNote');
+    const connectBtn = document.getElementById('connectBtn');
+    const panicBtn = document.getElementById('panicBtn');
+    const ribbon = document.getElementById('ribbon');
+    const brightnessInput = document.getElementById('brightness');
+    const bendRangeInput = document.getElementById('bendRange');
+    const spanSemisInput = document.getElementById('spanSemis');
+    const vibratoDepthInput = document.getElementById('vibratoDepth');
+    const vibratoRateInput = document.getElementById('vibratoRate');
+    const smoothingInput = document.getElementById('smoothing');
+
+    const statusText = document.getElementById('statusText');
+    const noteText = document.getElementById('noteText');
+    const bendText = document.getElementById('bendText');
+    const ccText = document.getElementById('ccText');
+    const posText = document.getElementById('posText');
+
+    let midiAccess = null;
+    let midiOutput = null;
+    let active = false;
+    let activeNote = null;
+    let currentPos = 0;
+    let filteredPos = 0;
+    let currentBend = 8192;
+    let rafId = null;
+    let noteLatched = false;
+    let pointerId = null;
+    let posLine = null;
+    let bendRangeSent = false;
+
+    for (let i = 1; i <= 16; i++) {
+      const o = document.createElement('option');
+      o.value = i;
+      o.textContent = `${i}`;
+      if (i === 2) o.selected = true; // Arduino code channel 0x01 => channel 2 in human terms
+      channelSelect.appendChild(o);
+    }
+
+    function chan() {
+      return Math.max(0, Math.min(15, Number(channelSelect.value) - 1));
+    }
+
+    function noteName(num) {
+      const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const octave = Math.floor(num / 12) - 1;
+      return `${names[num % 12]}${octave}`;
+    }
+
+    function send(msg) {
+      if (midiOutput) midiOutput.send(msg);
+    }
+
+    function sendCC(cc, value) {
+      send([0xB0 + chan(), cc & 0x7F, Math.max(0, Math.min(127, value | 0))]);
+    }
+
+    function sendPitchBend(value14) {
+      const v = Math.max(0, Math.min(16383, value14 | 0));
+      currentBend = v;
+      const lsb = v & 0x7F;
+      const msb = (v >> 7) & 0x7F;
+      send([0xE0 + chan(), lsb, msb]);
+      bendText.textContent = String(v);
+    }
+
+    function sendNoteOn(note, vel = 127) {
+      send([0x90 + chan(), note & 0x7F, vel & 0x7F]);
+    }
+
+    function sendNoteOff(note, vel = 0) {
+      send([0x80 + chan(), note & 0x7F, vel & 0x7F]);
+    }
+
+    function panic() {
+      for (let n = 0; n < 128; n++) sendNoteOff(n, 0);
+      sendCC(123, 0);
+      sendPitchBend(8192);
+      active = false;
+      noteLatched = false;
+      activeNote = null;
+      statusText.innerHTML = '<span class="bad">Tüm notalar kapatıldı</span>';
+      noteText.textContent = '-';
+      if (posLine) posLine.style.display = 'none';
+    }
+
+    function setProphetLikeBendRange(semitones) {
+      // RPN 0,0 => pitch bend sensitivity
+      send([0xB0 + chan(), 101, 0]);
+      send([0xB0 + chan(), 100, 0]);
+      send([0xB0 + chan(), 6, semitones & 0x7F]);
+      send([0xB0 + chan(), 38, 0]);
+      send([0xB0 + chan(), 101, 127]);
+      send([0xB0 + chan(), 100, 127]);
+      bendRangeSent = true;
+    }
+
+    function populateRibbonGuides() {
+      ribbon.innerHTML = '';
+      const center = document.createElement('div');
+      center.className = 'center-line';
+      ribbon.appendChild(center);
+
+      posLine = document.createElement('div');
+      posLine.className = 'position';
+      ribbon.appendChild(posLine);
+
+      const count = Number(spanSemisInput.value);
+      for (let i = 0; i <= count; i++) {
+        const frac = i / count;
+        const line = document.createElement('div');
+        line.className = 'note-line';
+        line.style.left = `${frac * 100}%`;
+        ribbon.appendChild(line);
+
+        const tag = document.createElement('div');
+        tag.className = 'note-tag';
+        tag.style.left = `${frac * 100}%`;
+        tag.textContent = noteName(Number(baseNoteInput.value) + i);
+        ribbon.appendChild(tag);
+      }
+    }
+
+    function updateMidiOutputs() {
+      midiOutSelect.innerHTML = '';
+      if (!midiAccess) return;
+      const outputs = [...midiAccess.outputs.values()];
+      outputs.forEach((out, idx) => {
+        const opt = document.createElement('option');
+        opt.value = out.id;
+        opt.textContent = out.name || `MIDI Out ${idx + 1}`;
+        midiOutSelect.appendChild(opt);
+      });
+      if (outputs.length) midiOutput = outputs[0];
+      midiOutSelect.onchange = () => {
+        midiOutput = midiAccess.outputs.get(midiOutSelect.value) || outputs[0] || null;
+        setStatus();
+      };
+      if (outputs.length) midiOutSelect.value = outputs[0].id;
+      setStatus();
+    }
+
+    function setStatus() {
+      if (midiOutput) {
+        statusText.innerHTML = `<span class="ok">Bağlı:</span> ${midiOutput.name}`;
+      } else {
+        statusText.innerHTML = '<span class="bad">MIDI çıkışı yok</span>';
+      }
+    }
+
+    async function connectMIDI() {
+      if (!navigator.requestMIDIAccess) {
+        statusText.innerHTML = '<span class="bad">Web MIDI desteklenmiyor</span>';
+        return;
+      }
+      midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+      updateMidiOutputs();
+    }
+
+    function getRibbonPos(clientX) {
+      const rect = ribbon.getBoundingClientRect();
+      const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+      return rect.width ? x / rect.width : 0;
+    }
+
+    function beginInteraction(clientX) {
+      if (!midiOutput) return;
+      active = true;
+      currentPos = getRibbonPos(clientX);
+      filteredPos = currentPos;
+      if (!bendRangeSent) setProphetLikeBendRange(Number(bendRangeInput.value));
+      if (posLine) posLine.style.display = 'block';
+      processAndSend(true);
+      if (!rafId) rafLoop();
+    }
+
+    function moveInteraction(clientX) {
+      if (!active) return;
+      currentPos = getRibbonPos(clientX);
+    }
+
+    function endInteraction() {
+      if (!active) return;
+      active = false;
+      if (activeNote !== null) sendNoteOff(activeNote, 0);
+      activeNote = null;
+      noteLatched = false;
+      sendPitchBend(8192);
+      noteText.textContent = '-';
+      if (posLine) posLine.style.display = 'none';
+    }
+
+    function processAndSend(force = false) {
+      const smooth = Number(smoothingInput.value);
+      filteredPos += (currentPos - filteredPos) * (1 - smooth);
+      posText.textContent = filteredPos.toFixed(3);
+      if (posLine) posLine.style.left = `${filteredPos * 100}%`;
+
+      const span = Number(spanSemisInput.value);
+      const baseNote = Number(baseNoteInput.value);
+      const noteFloat = filteredPos * span;
+      const noteNum = Math.round(noteFloat);
+      const midiNote = Math.max(0, Math.min(127, baseNote + noteNum));
+      const partial = noteFloat - noteNum;
+      const bendRange = Number(bendRangeInput.value);
+      const t = performance.now() / 1000;
+      const vibratoDepth = Number(vibratoDepthInput.value) / 8192;
+      const vibratoRate = Number(vibratoRateInput.value);
+      const vibrato = active ? Math.sin(t * Math.PI * 2 * vibratoRate) * vibratoDepth : 0;
+      const bendNorm = Math.max(-1, Math.min(1, (partial / bendRange) + vibrato));
+      const bend14 = Math.round(8192 + bendNorm * 8192);
+
+      const brightness = Number(brightnessInput.value);
+      ccText.textContent = String(brightness);
+
+      if (!noteLatched || activeNote !== midiNote || force) {
+        if (activeNote !== null) sendNoteOff(activeNote, 0);
+        sendNoteOn(midiNote, 127);
+        activeNote = midiNote;
+        noteLatched = true;
+      }
+
+      sendPitchBend(bend14);
+      sendCC(74, brightness);
+      noteText.textContent = `${midiNote} / ${noteName(midiNote)}`;
+    }
+
+    function rafLoop() {
+      if (active) processAndSend();
+      rafId = requestAnimationFrame(rafLoop);
+    }
+
+    connectBtn.addEventListener('click', connectMIDI);
+    panicBtn.addEventListener('click', panic);
+    spanSemisInput.addEventListener('input', populateRibbonGuides);
+    baseNoteInput.addEventListener('input', populateRibbonGuides);
+    bendRangeInput.addEventListener('change', () => {
+      bendRangeSent = false;
+      if (midiOutput) setProphetLikeBendRange(Number(bendRangeInput.value));
+    });
+
+    ribbon.addEventListener('pointerdown', (e) => {
+      pointerId = e.pointerId;
+      ribbon.setPointerCapture(pointerId);
+      beginInteraction(e.clientX);
+    });
+    ribbon.addEventListener('pointermove', (e) => {
+      if (pointerId === e.pointerId) moveInteraction(e.clientX);
+    });
+    ribbon.addEventListener('pointerup', (e) => {
+      if (pointerId === e.pointerId) {
+        ribbon.releasePointerCapture(pointerId);
+        pointerId = null;
+        endInteraction();
+      }
+    });
+    ribbon.addEventListener('pointercancel', endInteraction);
+    ribbon.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    populateRibbonGuides();
+    setStatus();
+  </script>
+</body>
+</html>
